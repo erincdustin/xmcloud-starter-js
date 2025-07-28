@@ -5,6 +5,7 @@ import {
   DecodedToken,
   OrderCloudError,
   Tokens,
+  Cart,
 } from 'ordercloud-javascript-sdk';
 import {
   createContext,
@@ -27,6 +28,11 @@ const isAnonToken = (token: string) => {
   const parsed = jwtDecode<DecodedToken>(token);
   return !!parsed.orderid;
 };
+
+interface CartData {
+  lineItemCount: number;
+  total?: number;
+}
 
 export interface IOrderCloudContext {
   /**
@@ -67,6 +73,13 @@ export interface IOrderCloudContext {
   baseApiUrl: string;
   clientId: string;
   token?: string;
+
+  // Cart functionality
+  cartData: CartData;
+  isCartLoading: boolean;
+  refreshCart: () => Promise<void>;
+  addToCart: (productID: string, quantity?: number) => Promise<void>;
+  isAddingToCart: boolean;
 }
 
 const INITIAL_ORDERCLOUD_CONTEXT: IOrderCloudContext = {
@@ -86,6 +99,16 @@ const INITIAL_ORDERCLOUD_CONTEXT: IOrderCloudContext = {
   baseApiUrl: 'https://api.ordercloud.io/v1',
   clientId: 'xxxx',
   token: undefined,
+  // Cart defaults
+  cartData: { lineItemCount: 0 },
+  isCartLoading: false,
+  refreshCart: async () => {
+    return Promise.reject();
+  },
+  addToCart: async (productID: string, quantity?: number) => {
+    return Promise.reject({ productID, quantity });
+  },
+  isAddingToCart: false,
 };
 
 export const OrderCloudContext = createContext<IOrderCloudContext>(INITIAL_ORDERCLOUD_CONTEXT);
@@ -103,10 +126,62 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
   const [token, setToken] = useState<string | undefined>();
   const [authLoading, setAuthLoading] = useState(true);
 
+  // Cart state
+  const [cartData, setCartData] = useState<CartData>({ lineItemCount: 0 });
+  const [isCartLoading, setIsCartLoading] = useState(false);
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
+
+  const refreshCart = useCallback(async () => {
+    if (!isAuthenticated) {
+      setCartData({ lineItemCount: 0 });
+      return;
+    }
+
+    try {
+      setIsCartLoading(true);
+      const cartResponse = await Cart.Get();
+
+      // Count line items from the cart
+      const lineItemCount = cartResponse.LineItemCount || 0;
+      const total = cartResponse.Total || 0;
+
+      setCartData({ lineItemCount, total });
+    } catch (error) {
+      console.error('Failed to fetch cart:', error);
+      setCartData({ lineItemCount: 0 });
+    } finally {
+      setIsCartLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  const addToCart = useCallback(
+    async (productID: string, quantity: number = 1) => {
+      if (!isAuthenticated) return;
+
+      try {
+        setIsAddingToCart(true);
+        await Cart.CreateLineItem({
+          ProductID: productID,
+          Quantity: quantity,
+        });
+
+        // Refresh cart data after adding item
+        await refreshCart();
+      } catch (error) {
+        console.error('Failed to add product to cart:', error);
+        throw error;
+      } finally {
+        setIsAddingToCart(false);
+      }
+    },
+    [isAuthenticated, refreshCart]
+  );
+
   const handleLogout = useCallback(() => {
     setIsAuthenticated(false);
     setIsLoggedIn(false);
     setToken(undefined);
+    setCartData({ lineItemCount: 0 }); // Clear cart on logout
     Tokens.RemoveAccessToken();
     Tokens.RemoveRefreshToken();
     setAuthLoading(false);
@@ -126,13 +201,15 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
         setIsAuthenticated(true);
         setIsLoggedIn(true);
         setAuthLoading(false);
+        // Refresh cart after login
+        await refreshCart();
         return response;
       } catch (ex) {
         setAuthLoading(false);
         return Promise.reject(ex as OrderCloudError);
       }
     },
-    [clientId]
+    [clientId, refreshCart]
   );
 
   const verifyToken = useCallback(
@@ -150,17 +227,17 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
         if (validToken) {
           const isAnon = isAnonToken(validToken);
 
-          if (isAnon) {
-            handleLogout();
-            return;
-          }
+          // ✅ Keep anonymous tokens - don't logout for anonymous users
           setIsAuthenticated(true);
           setToken(validToken);
-          if (!isAnon) setIsLoggedIn(true);
+          setIsLoggedIn(!isAnon); // Only logged in if NOT anonymous
           setAuthLoading(false);
+          // Refresh cart after authentication
+          await refreshCart();
           return;
         }
 
+        // Only create new anonymous token if no valid token exists
         try {
           const response = await Auth.Anonymous(clientId);
 
@@ -188,7 +265,7 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
         setIsLoggedIn(false);
       }
     },
-    [clientId, handleLogout]
+    [clientId, refreshCart]
   );
 
   const newAnonSession = useCallback(async () => {
@@ -211,6 +288,8 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
           setIsAuthenticated(true);
           setIsLoggedIn(false);
           setToken(response.access_token);
+          // Refresh cart for new session
+          await refreshCart();
         } catch (error) {
           setIsAuthenticated(false);
           setIsLoggedIn(false);
@@ -221,7 +300,7 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
     } catch (error) {
       console.error('newAnonSession error:', error);
     }
-  }, [clientId]);
+  }, [clientId, refreshCart]);
 
   // ✅ Setup interceptor only once and avoid infinite loops
   useEffect(() => {
@@ -267,6 +346,12 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
       logout: handleLogout,
       login: handleLogin,
       setToken: handleProvidedToken,
+      // Cart functionality
+      cartData,
+      isCartLoading,
+      refreshCart,
+      addToCart,
+      isAddingToCart,
     };
   }, [
     baseApiUrl,
@@ -279,6 +364,11 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
     handleLogout,
     handleLogin,
     handleProvidedToken,
+    cartData,
+    isCartLoading,
+    refreshCart,
+    addToCart,
+    isAddingToCart,
   ]);
 
   return (
