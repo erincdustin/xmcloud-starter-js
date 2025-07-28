@@ -14,23 +14,25 @@ const ProductCardInternal = ({ product }: { product: BuyerProduct<MyProductXp> }
   const firstImage = product.xp?.Images?.[0];
 
   return (
-    <div className="card h-100">
+    <div className="bg-white rounded-lg shadow-md overflow-hidden h-full border border-gray-200">
       {firstImage && (
         <img
           src={firstImage.Url}
           alt={product.Name || 'Product image'}
-          className="card-img-top"
-          style={{ height: '200px', objectFit: 'cover' }}
+          className="w-full h-48 object-cover"
           onError={(e) => {
             e.currentTarget.style.display = 'none';
           }}
         />
       )}
-      <div className="card-body">
-        <h3 className="card-title">
-          {product.Name} | {product.PriceSchedule?.PriceBreaks?.[0].Price}
-        </h3>
-        {product.Description && <p className="card-text">{product.Description}</p>}
+      <div className="p-4">
+        <h4 className="text-lg font-semibold text-gray-900 mb-2">{product.Name}</h4>
+        {product.PriceSchedule?.PriceBreaks?.[0].Price && (
+          <h5 className="text-lg font-semibold text-gray-900 mb-2">
+            ${product.PriceSchedule?.PriceBreaks?.[0].Price}
+          </h5>
+        )}
+        {product.Description && <p className="text-gray-600 text-sm">{product.Description}</p>}
       </div>
     </div>
   );
@@ -53,7 +55,7 @@ const ProductList = (): JSX.Element => {
         setLoading(true);
         setError(null);
 
-        const response = await Me.ListProducts({ filters: { 'xp.Images': '*' }, pageSize: 5 });
+        const response = await Me.ListProducts({ filters: { 'xp.Images': '*' }, pageSize: 8 });
         setProducts(response.Items || []);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to fetch products';
@@ -68,9 +70,9 @@ const ProductList = (): JSX.Element => {
 
   if (authLoading) {
     return (
-      <div className="d-flex justify-content-center p-4">
-        <div className="spinner-border" role="status">
-          <span className="visually-hidden">Authenticating...</span>
+      <div className="flex justify-center p-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600">
+          <span className="sr-only">Authenticating...</span>
         </div>
       </div>
     );
@@ -78,9 +80,9 @@ const ProductList = (): JSX.Element => {
 
   if (loading) {
     return (
-      <div className="d-flex justify-content-center p-4">
-        <div className="spinner-border" role="status">
-          <span className="visually-hidden">Loading products...</span>
+      <div className="flex justify-center p-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600">
+          <span className="sr-only">Loading products...</span>
         </div>
       </div>
     );
@@ -88,21 +90,25 @@ const ProductList = (): JSX.Element => {
 
   if (error) {
     return (
-      <div className="alert alert-danger" role="alert">
-        <h4 className="alert-heading">Error loading products</h4>
-        <p>{error}</p>
+      <div className="bg-red-50 border border-red-200 rounded-md p-4">
+        <h4 className="text-red-800 font-semibold mb-2">Error loading products</h4>
+        <p className="text-red-600">{error}</p>
       </div>
     );
   }
 
   if (products.length === 0) {
-    return <div className="alert alert-info">No products available.</div>;
+    return (
+      <div className="bg-blue-50 border border-blue-200 rounded-md p-4 text-blue-800">
+        No products available.
+      </div>
+    );
   }
 
   return (
-    <div className="row g-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
       {products.map((product) => (
-        <div key={product.ID} className="col-12 col-sm-6 col-md-4 col-lg-3">
+        <div key={product.ID}>
           <ProductCardInternal product={product} />
         </div>
       ))}

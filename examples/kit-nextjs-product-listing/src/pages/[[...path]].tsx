@@ -15,12 +15,21 @@ import client from 'lib/sitecore-client';
 import components from '.sitecore/component-map';
 import scConfig from 'sitecore.config';
 import sites from '.sitecore/sites.json';
+import OrderCloudProvider from '@/providers/OrderCloudProvider';
 
 const SitecorePage = ({ notFound, componentProps, page }: SitecorePageProps): JSX.Element => {
   useEffect(() => {
     // Since Sitecore Editor does not support Fast Refresh, need to refresh editor chromes after Fast Refresh finished
     handleEditorFastRefresh();
   }, []);
+
+  const orderCloudConfig = {
+    baseApiUrl:
+      process.env.ORDERCLOUD_BASE_URL ||
+      process.env.NEXT_PUBLIC_ORDERCLOUD_BASE_URL ||
+      'https://api.ordercloud.io/v1',
+    clientId: process.env.ORDERCLOUD_CLIENT_ID || process.env.NEXT_PUBLIC_ORDERCLOUD_CLIENT_ID,
+  };
 
   if (notFound || !page) {
     // Shouldn't hit this (as long as 'notFound' is being returned below), but just to be safe
@@ -30,7 +39,12 @@ const SitecorePage = ({ notFound, componentProps, page }: SitecorePageProps): JS
   return (
     <ComponentPropsContext value={componentProps || {}}>
       <SitecoreProvider componentMap={components} page={page} api={scConfig.api}>
-        <Layout page={page} />
+        <OrderCloudProvider
+          baseApiUrl={orderCloudConfig.baseApiUrl}
+          clientId={orderCloudConfig.clientId!}
+        >
+          <Layout page={page} />
+        </OrderCloudProvider>
       </SitecoreProvider>
     </ComponentPropsContext>
   );
