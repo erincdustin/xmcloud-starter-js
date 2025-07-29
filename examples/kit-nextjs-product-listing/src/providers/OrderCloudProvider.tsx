@@ -46,6 +46,10 @@ export interface IOrderCloudContext {
    */
   isLoggedIn: boolean;
   /**
+   * Whether anonymous users are allowed
+   */
+  allowAnonymous: boolean;
+  /**
    * Clears all tokens from the OrderCloud JS SDK and conditionally will
    * get a new anonymous token based on allowAnonymous
    */
@@ -85,6 +89,7 @@ export interface IOrderCloudContext {
 const INITIAL_ORDERCLOUD_CONTEXT: IOrderCloudContext = {
   isAuthenticated: false,
   isLoggedIn: false,
+  allowAnonymous: true,
   logout: () => {},
   login: async (username: string, password: string, rememberMe?: boolean) => {
     return Promise.reject({ username, password, rememberMe });
@@ -340,6 +345,7 @@ const OrderCloudProvider: FC<PropsWithChildren<IOrderCloudProvider>> = ({
       clientId,
       isAuthenticated,
       isLoggedIn,
+      allowAnonymous: true,
       newAnonSession,
       token,
       authLoading,
