@@ -100,4 +100,4 @@ export const useAuthGuard = () => {
     requiresAuth: !allowAnonymous && !isAuthenticated,
     canAccess: allowAnonymous || isAuthenticated,
   };
-}; 
+};
